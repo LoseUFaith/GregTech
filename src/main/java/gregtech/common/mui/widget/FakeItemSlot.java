@@ -27,8 +27,8 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class FakeItemSlot extends Widget<FakeItemSlot>
-                          implements Interactable, RecipeViewerGhostIngredientSlot<ItemStack>,
-                          RecipeViewerIngredientProvider {
+        implements Interactable, RecipeViewerGhostIngredientSlot<ItemStack>,
+                   RecipeViewerIngredientProvider {
 
     private final boolean receiveFromRecipeViewer;
 
@@ -169,6 +169,7 @@ public class FakeItemSlot extends Widget<FakeItemSlot>
         private static final int ITEM_CHANGED = 0;
         private static final int ITEM_SET_FROM_CLIENT = 1;
         private static final int ITEM_SET_TO_CURSOR = 2;
+        private static final int LOCK_ITEM = 3;
 
         @Nullable
         private Supplier<@NotNull ItemStack> itemStackSupplier;
@@ -230,6 +231,11 @@ public class FakeItemSlot extends Widget<FakeItemSlot>
         public void readOnClient(int id, PacketBuffer buf) throws IOException {
             if (id == ITEM_CHANGED) {
                 cachedStack = buf.readItemStack();
+            } else if (id == LOCK_ITEM) {
+                ItemStack itemStack = buf.readItemStack();
+                if (itemStackConsumer != null) {
+                    itemStackConsumer.accept(itemStack);
+                }
             }
         }
 
@@ -243,6 +249,7 @@ public class FakeItemSlot extends Widget<FakeItemSlot>
 
             if (itemStackConsumer != null) {
                 itemStackConsumer.accept(itemStack);
+                sync(LOCK_ITEM, buffer -> buffer.writeItemStack(itemStack));
             }
         }
     }

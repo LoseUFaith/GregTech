@@ -235,6 +235,8 @@ public class MetaTileEntityQuantumChest extends MetaTileEntityQuantumStorage<IIt
 
             @Override
             public boolean isItemValid(int slot, @NotNull ItemStack stack) {
+                if (locked && !areItemStackIdentical(lockedStack, stack))
+                    return false;
                 NBTTagCompound compound = stack.getTagCompound();
                 ItemStack outStack = getExportItems().getStackInSlot(0);
                 boolean outStackMatch = true;
@@ -320,15 +322,15 @@ public class MetaTileEntityQuantumChest extends MetaTileEntityQuantumStorage<IIt
     @Override
     protected void createWidgets(ModularPanel mainPanel, PanelSyncManager syncManager) {
         mainPanel.child(createQuantumDisplay("gregtech.machine.quantum_chest.items_stored",
-                () -> virtualItemStack.getDisplayName(),
-                textWidget -> !virtualItemStack.isEmpty(),
-                () -> TextFormattingUtil.formatNumbers(itemsStoredInside)))
+                        () -> locked ? lockedStack.getDisplayName() : virtualItemStack.getDisplayName(),
+                        textWidget -> !virtualItemStack.isEmpty() || locked,
+                        () -> TextFormattingUtil.formatNumbers(itemsStoredInside)))
                 .child(new FakeItemSlot(true)
                         .showTooltip(true)
                         .showAmount(false)
                         .background(IDrawable.NONE)
-                        .slot(itemInventory, 0)
-                        // TODO: lock from ghost item .receiveItemFromClient(this::setLocked)
+                        .item(() -> locked ? lockedStack : virtualItemStack)
+                        .receiveItemFromClient(this::setLockedItem)
                         .pos(148, 41));
     }
 
@@ -431,9 +433,16 @@ public class MetaTileEntityQuantumChest extends MetaTileEntityQuantumStorage<IIt
         }
     }
 
-    protected void setLocked(ItemStack stack) {
-        this.lockedStack = stack;
-        super.setLocked(!stack.isEmpty());
+    protected void setLockedItem(ItemStack stack) {
+        if (canLockItem(stack)) {
+            this.lockedStack = stack.copy();
+            setLocked(true);
+        }
+    }
+
+    private boolean canLockItem(ItemStack stack) {
+        return !stack.isEmpty() &&
+                (this.virtualItemStack.isEmpty() || areItemStackIdentical(stack, this.virtualItemStack));
     }
 
     @Override

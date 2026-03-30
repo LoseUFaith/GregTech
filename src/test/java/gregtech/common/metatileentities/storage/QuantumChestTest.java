@@ -240,6 +240,38 @@ public class QuantumChestTest {
         }
     }
 
+    @Test
+    public void Test_Locked() {
+        for (var quantumChest : createInstances()) {
+            IItemHandler combinedInventory = quantumChest.getCombinedInventory();
+
+            insertItem(combinedInventory, GTUtility.copy(256, SAND), false);
+            quantumChest.setLocked(true);
+
+            ItemStack stack = insertItem(combinedInventory, SAND.copy(), true);
+            String reason = String.format("%s should be Empty!", itemStackToString(stack));
+            assertThat(reason, stack.isEmpty());
+
+            stack = insertItem(combinedInventory, GRAVEL.copy(), true);
+            reason = String.format("%s should not be Empty!", stack);
+            assertThat(reason, !stack.isEmpty());
+
+            testAllSlots(quantumChest.getCombinedInventory(), false);
+
+            int expected = 128;
+            stack = insertItem(combinedInventory, GTUtility.copy(128, GRAVEL), true);
+            reason = String.format("%s should've %d items, not %d items!", stack, expected, stack.getCount());
+            assertThat(reason, stack.getCount(), is(expected));
+
+            quantumChest.setLocked(false);
+
+            stack = insertItem(combinedInventory, GTUtility.copy(128, GRAVEL), true);
+            reason = String.format("%s should be Empty!", stack);
+            assertThat(reason, stack.isEmpty());
+
+        }
+    }
+
     private static QuantumChestWrapper[] createInstances() {
         QuantumChestWrapper[] quantumChests = new QuantumChestWrapper[10];
         for (int i = 0; i < 5; i++) {
