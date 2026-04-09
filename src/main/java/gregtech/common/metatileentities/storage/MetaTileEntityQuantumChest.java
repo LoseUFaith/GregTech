@@ -58,7 +58,7 @@ import java.util.List;
 import static gregtech.api.capability.GregtechDataCodes.*;
 
 public class MetaTileEntityQuantumChest extends MetaTileEntityQuantumStorage<IItemHandler>
-                                        implements ITieredMetaTileEntity, IFastRenderMetaTileEntity {
+        implements ITieredMetaTileEntity, IFastRenderMetaTileEntity {
 
     private final int tier;
     protected final long maxStoredItems;
@@ -126,8 +126,10 @@ public class MetaTileEntityQuantumChest extends MetaTileEntityQuantumStorage<IIt
             if (shouldTransferImport()) {
                 ItemStack inputStack = importItems.getStackInSlot(0);
                 ItemStack outputStack = exportItems.getStackInSlot(0);
-                if (!inputStack.isEmpty() &&
-                        (virtualItemStack.isEmpty() || areItemStackIdentical(outputStack, inputStack))) {
+                if (!inputStack.isEmpty() && (
+                        (!locked && (virtualItemStack.isEmpty() || areItemStackIdentical(outputStack, inputStack)))
+                                || (locked && (lockedStack.isEmpty() || areItemStackIdentical(lockedStack, inputStack)))
+                )) {
                     GTTransferUtils.moveInventoryItems(importItems, combinedInventory);
 
                     markDirty();
@@ -210,7 +212,19 @@ public class MetaTileEntityQuantumChest extends MetaTileEntityQuantumStorage<IIt
         List<IItemHandler> temp = new ArrayList<>();
         temp.add(this.exportItems);
         temp.add(this.itemInventory);
-        this.combinedInventory = new ItemHandlerList(temp);
+        this.combinedInventory = new ItemHandlerList(temp) {
+
+            @NotNull
+            @Override
+            public ItemStack insertItem(int slot, @NotNull ItemStack stack, boolean simulate) {
+                ItemStack result = super.insertItem(slot, stack, simulate);
+
+                if (locked && lockedStack.isEmpty() && !result.isEmpty()) {
+                    lockedStack = stack.copy();
+                }
+                return result;
+            }
+        };
         this.outputItemInventory = new ItemHandlerProxy(new GTItemStackHandler(this, 0), combinedInventory);
     }
 
@@ -235,7 +249,7 @@ public class MetaTileEntityQuantumChest extends MetaTileEntityQuantumStorage<IIt
 
             @Override
             public boolean isItemValid(int slot, @NotNull ItemStack stack) {
-                if (locked && !areItemStackIdentical(lockedStack, stack))
+                if (locked && !lockedStack.isEmpty() && !areItemStackIdentical(lockedStack, stack))
                     return false;
                 NBTTagCompound compound = stack.getTagCompound();
                 ItemStack outStack = getExportItems().getStackInSlot(0);
@@ -245,8 +259,8 @@ public class MetaTileEntityQuantumChest extends MetaTileEntityQuantumStorage<IIt
                 }
                 if (compound == null) return true;
                 return outStackMatch && !(compound.hasKey(NBT_ITEMSTACK, NBT.TAG_COMPOUND) ||
-                        compound.hasKey("Fluid", NBT.TAG_COMPOUND)); // prevents inserting items with NBT to the Quantum
-                                                                     // Chest
+                        compound.hasKey("Fluid",
+                                NBT.TAG_COMPOUND)); // prevents inserting items with NBT to the Quantum Chest
             }
         };
     }
@@ -323,7 +337,7 @@ public class MetaTileEntityQuantumChest extends MetaTileEntityQuantumStorage<IIt
     protected void createWidgets(ModularPanel mainPanel, PanelSyncManager syncManager) {
         mainPanel.child(createQuantumDisplay("gregtech.machine.quantum_chest.items_stored",
                         () -> locked ? lockedStack.getDisplayName() : virtualItemStack.getDisplayName(),
-                        textWidget -> !virtualItemStack.isEmpty() || locked,
+                        textWidget -> !virtualItemStack.isEmpty() || (locked && !lockedStack.isEmpty()),
                         () -> TextFormattingUtil.formatNumbers(itemsStoredInside)))
                 .child(new FakeItemSlot(true)
                         .showTooltip(true)
@@ -426,8 +440,9 @@ public class MetaTileEntityQuantumChest extends MetaTileEntityQuantumStorage<IIt
     @Override
     protected void setLocked(boolean locked) {
         super.setLocked(locked);
-        if (locked && !this.virtualItemStack.isEmpty() && this.lockedStack.isEmpty()) {
-            this.lockedStack = this.virtualItemStack.copy();
+        ItemStack exportItems = getExportItems().getStackInSlot(0);
+        if (locked && !exportItems.isEmpty() && this.lockedStack.isEmpty()) {
+            this.lockedStack = exportItems.copy();
         } else if (!locked) {
             this.lockedStack = ItemStack.EMPTY;
         }
@@ -441,7 +456,9 @@ public class MetaTileEntityQuantumChest extends MetaTileEntityQuantumStorage<IIt
     }
 
     private boolean canLockItem(ItemStack stack) {
+        ItemStack exportItems = getExportItems().getStackInSlot(0);
         return !stack.isEmpty() &&
+                (exportItems.isEmpty() || areItemStackIdentical(stack, exportItems)) &&
                 (this.virtualItemStack.isEmpty() || areItemStackIdentical(stack, this.virtualItemStack));
     }
 
